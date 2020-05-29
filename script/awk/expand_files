@@ -1,0 +1,30 @@
+#!/bin/awk -f
+
+function  expand_file(input) {
+ while ((getline < input) > 0) {
+# gsub ("//.*", "");
+# gsub ("-y.*", "");
+# gsub ("-v.*", "");
+# gsub ("^+.*", "");
+# gsub ("-sv", "");
+  gsub ("\\${PROJ_HOME}|\\$PROJ_HOME", ENVIRON["PROJ_HOME"]);
+  if ($1 == "-f") {
+   expand_file($2)
+  } else {
+   print $0
+  }
+ }
+}
+
+BEGIN {
+ if( ARGC == 2 ) {
+  expand_file(ARGV[1])
+ } else {
+  print "Please specify input \"filelist.f\" filename"
+ }
+ exit
+}
+
+END {
+#print "Done!"
+}
