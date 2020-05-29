@@ -1,0 +1,33 @@
+#!/bin/csh -f
+
+# Emacs Verilog Mode Process
+# -----------------------------------------
+
+if ($#argv != 2) then
+  echo "Syntax: emacs_vm src_file trg_file"
+  echo ""
+  exit 0
+endif
+
+set src = $1
+set trg = $2
+
+if (-f /tmp/emacs_vm.tmp) then
+ rm /tmp/emacs_vm.tmp
+endif
+
+# set src_base = `basename $src`
+# set src_file = /tmp/$src_base.tmp
+# cp $src $src_file
+
+
+# -----------------------------------------------------------------------------------------------
+# emacs --batch $src  --load $HOME/elisp/verilog-mode.el -f verilog-batch-auto -f save-buffer
+  emacs --batch $src  --load $HOME/elisp/verilog-mode.el -f verilog-auto -eval '(write-file "/tmp/emacs_vm.tmp")'
+
+if (-f /tmp/emacs_vm.tmp) then
+ mv /tmp/emacs_vm.tmp $trg
+ echo "File $trg generated"
+else
+ echo "Error in Emacs Verilog Mode flow"
+endif
