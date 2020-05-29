@@ -1,0 +1,28 @@
+#!/bin/csh -f
+
+# example:
+# cut_inst "blk" "u_blk0" design.gv
+
+if ($#argv != 3) then
+  echo "Syntax: ins_blk_io_dly blk u_blk0 design.all.v"
+  echo "   blk         : design name"
+  echo "   u_blk0      : instance name of design"
+  echo "   design.all.v: aggregated all design file"
+  echo ""
+  echo "This script will modify design.all.v and insert wire delay to target design instance"
+  echo ""
+  exit 0
+endif
+
+if( -e /tmp/$uid ) then
+ rm -rf /tmp/$uid
+endif
+
+mkdir /tmp/$uid
+
+sed -n -e "/^\s*$1 $2/,/;/p" $3 | tr '\n' ' ' > /tmp/$uid/cut_inst.tmp
+gen_io_dly /tmp/$uid/cut_inst.tmp > /tmp/$uid/cut_inst.out
+sed -i -e "/^\s*$1 $2/i XOXO" $3
+sed -i -e "/^\s*$1 $2/,/;/d"  $3
+sed -i -e "/XOXO/r /tmp/$uid/cut_inst.out" $3
+sed -i -e "/XOXO/d" $3 
