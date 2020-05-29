@@ -1,0 +1,284 @@
+#!/usr/bin/perl -w
+
+use strict;
+use warnings;
+
+
+my $user_name = $ENV{'USER'};
+my $date_str  = "+\"%b%d %Y  %T\"";
+# my $run_time  = system("date $date_str");
+my $run_time  = `date $date_str`;
+chomp ($run_time);
+
+
+# if(($#ARGV+1) < 1) {
+if(@ARGV < 1) {
+ #print_help();
+ #print "Usage:\n\tppp src_file \"\/\/\"\n";
+ #print "\tppp -h for help\n";
+ die "Please specify input file name or use \'-h\' for help\n";
+}
+
+my $fname = $ARGV[0];
+my $fnrun = "/tmp/ppp_run";
+
+my $cmt = "\/\/";      # if target source file is verilog (default)
+my $dbg = 0;
+
+if(@ARGV >= 2) {
+ for (my $i=1; $i<@ARGV ; $i++) {
+  if( $ARGV[$i] eq "-d" ) {
+   $dbg = 1;
+   print "Debug Output file: $fnrun is generated\n\n";
+  } else {
+   $cmt  = $ARGV[$i];
+  }
+ } 
+} else {
+ $cmt  = "\/\/";      # if target source file is verilog (default)
+#$cmt  = "\#";        # if target source file is perl
+}
+
+# my $cmt0  = "\/\/";
+# my $cmt1  = "\#";
+
+# check file exist or not
+my $fh_src;
+
+my @all_line;
+my @out_ary=();
+
+if (-e $fname ) {
+ @all_line = incl_file($fname);
+#open ($fh_src, '<:encoding(UTF-8)', $fname) or die "Could not open file: '$fname' for read $!";
+} else {
+ if ($fname eq "-h" ) {
+  print_help();
+ } else {
+  print "File: $fname not found\n";
+ }
+ die;
+}
+
+my $fh_run;
+if( $dbg == 1 ) {
+ open($fh_run, '>', $fnrun) or die "Could not open file: '$fnrun' for write $!";
+}
+
+# print $fh_run "#!\/usr/bin/perl -w\n";
+# print $fh_run "use strict;\n";
+# print $fh_run "use warnings;\n\n";
+
+push(@out_ary,  "#!\/usr/bin/perl -w\n");
+push(@out_ary,  "use strict;\n");
+push(@out_ary,  "use warnings;\n\n");
+
+push(@out_ary,  "print \"$cmt -----------------------------------------------\\n\";\n");
+push(@out_ary,  "print \"$cmt This is a ppp auto-generated file. DO NOT EDIT!\\n\";\n");
+push(@out_ary,  "print \"$cmt By user: $user_name, $run_time\\n\";\n");
+push(@out_ary,  "print \"$cmt -----------------------------------------------\\n\";\n");
+
+my $ml_beg = 0;          # mulit-line begin
+my $ml_end = 1;          # multi-line end
+my $il_cmd = 0;          # in-line command detected
+my $cmmt;
+
+# while (my $line = <$fh_src>) {
+foreach my $line (@all_line) {
+ chomp $line;
+ $il_cmd = 0;
+
+ if($line =~ m/^\:\[/) {
+  if( $ml_end == 0 ) {
+   print "Error of Multi-Line definition, found \':[\' but no \':]\' defined ahead\n";
+  } else {
+   $ml_beg = 1;
+   $ml_end = 0;
+  }
+  $il_cmd = 1;
+ }
+
+ if($line =~ m/^\:\]/) {
+  if( $ml_beg == 0 ) {
+   print "Error of Multi-Line definition, found \':]\' but no \':[\' defined ahead\n";
+  } else {
+   $ml_end = 1;
+   $ml_beg = 0;
+  }
+  $il_cmd = 1;
+ }
+
+
+ if($line =~ m/^\:\:(.*)$/) {
+# print "single line command\n";
+# print $fh_run "$1\n";
+  push(@out_ary,"$1\n");
+  $il_cmd = 1;
+ }
+
+ if($line =~ m/^\:\#(.*)$/) {
+# print "single line comments\n";
+# print $fh_run "print \"".$cmt.$1."\\n\";\n";
+  $cmmt = $1;
+  $cmmt =~ s/\\/\\\\/g;
+  $cmmt =~ s/\"/\\\"/g;
+  $cmmt =~ s/\$/\\\$/g;
+  push(@out_ary,"print \"".$cmt.$cmmt."\\n\";\n");
+  $il_cmd = 1;
+ }
+
+ if($line =~ m/^\:I/) {
+# print "include comments\n";
+  $il_cmd = 1;
+ }
+
+ # inline perl script
+ if( $il_cmd == 0 && $ml_beg == 0 ) {
+  if( $line =~ m/'(.*)'/) {
+   my $i=0;
+#  print $fh_run "print ";
+   push(@out_ary,"print ");
+   my @outs = split('\'', $line);
+   my $p_on = 0;
+   my $f1st = 1;
+
+   foreach my $val (@outs) {
+    if ( $val =~ /^\$/ ) {            # must have leading '$'
+     push(@out_ary,"(".$val.").");
+     $p_on = 1;
+    } else {
+     $val =~ s/\\/\\\\/g;
+     $val =~ s/\"/\\\"/g;
+     $val =~ s/\$/\\\$/g;
+     if( $p_on == 1 or $f1st == 1 ) {
+      push(@out_ary,"\"".$val."\".");
+      $p_on = 0;
+     } else {
+      push(@out_ary,"\"\'".$val."\".");
+     }
+    }
+    $f1st = 0;
+
+
+
+
+
+#   if( $i % 2 ) {
+#    print $fh_run "(".$val.").";
+#    if ( $val =~ /^\$/ ) {            # must have leading '$'
+#     push(@out_ary,"(".$val.").");
+#    } else {
+#     push(@out_ary,"\"\'".$val."\'\".");
+#    }
+#   } else {
+#    print $fh_run "\"".$val."\".";
+#    $val =~ s/\\/\\\\/g;
+#    $val =~ s/\"/\\\"/g;
+#    push(@out_ary,"\"".$val."\".");
+#   }
+
+#   if( $i == 0 ) {
+#    print $fh_run $val."\"";
+#   } else {
+#    print $fh_run "\.".$val;
+#   }
+
+#   $i++;
+   }  
+#  print $fh_run "\"\\n\";\n";
+   push(@out_ary,"\"\\n\";\n");
+  } else {
+#  print $fh_run "print \"".$line."\\n\";\n";
+   $line =~ s/\\/\\\\/g;
+   $line =~ s/\"/\\\"/g;
+   $line =~ s/\$/\\\$/g;
+   push(@out_ary,"print \"".$line."\\n\";\n");
+  } 
+ } else {
+  if( $ml_beg == 1 ) {
+   $line =~ s/^\:\[//;
+#  print $fh_run "$line\n";
+   push(@out_ary,"$line\n");
+  }
+ }
+}
+
+if( $dbg == 1 ) {
+ foreach my $ll (@out_ary) {
+  print $fh_run $ll;
+ }
+} else {
+ my $ll = join ('', @out_ary);
+ eval ($ll);
+}
+
+
+# ----------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------
+sub print_help {
+ print "Usage:\n";
+ print "\tppp src_file [cmt_str] [-d]\n\n";
+ print "Example:\n";
+ print "\tppp src.xxx.pp \"\/\/\" -d       <--default is C/Verilog style comments\n";
+ print "\tppp src.xxx.pp \"#\"\n\n";
+ print "Source file in-line command:\n";
+ print "\t:[               start of multi-line perl command\n";
+ print "\t:]               end   of multi-line perl command\n";
+ print "\t::               single-line perl command\n";
+ print "\t:#               comments for in-line perl command\n";
+ print "\t:I filename      include another source file, environment \$variable are allowed in file name path,\n";
+ print "\t                 comments start with \'#\' after the file name are supported\n\n";
+ print "Source file in-line variable substitution:\n";
+ print "\tstr1'\$var'str2   single perl variable or perl statements at \$var is accepted\n\n";
+ print "Bug Report:\n";
+ print "\tpatrickxlin\@gmail.com\n";
+}
+
+
+# ----------------------------------------------------------------------------------
+# ----------------------------------------------------------------------------------
+# process include file
+sub incl_file {
+ my ($fn) = @_;
+ my $ff;
+ if( $fn =~ m/\$/ ) {       # handle enviroment variable in path
+# $fn = "echo \\".$fn;
+# print $fn."\n";
+# $ff = system $fn;
+  $fn =~ s/\//\\\//g;
+# print "===".$fn."===\n";
+  $ff = `echo $fn`;
+  chomp($ff);
+# print "+++".$ff."+++\n";
+ } else {
+  $ff = $fn;
+ }
+
+ if (!-e $ff) {
+  die "File: $ff not found\n";
+ }
+
+#$fn =~ s/\$//;
+ my $fh;
+ open ($fh, '<', $ff) or die "Could not open file: \'$ff\' for read, $!";
+
+ my @line_ary;
+
+ while (my $line = <$fh>) {
+  chomp $line;
+  if($line =~ m/^\:I(.*)$/) {
+   my $fi = $1;
+   $fi =~ s/\s*#.*$//;      # remove # comments at tail
+   $fi =~ s/^\s*//;
+   if( $dbg == 1 ) {
+#   print "Found include file directive :I: $fi\n";
+    print "Found file included directive ==> $line\n";
+   }
+   my @incl_ary = incl_file($fi);
+   @line_ary = (@line_ary, @incl_ary);
+  } else {
+   push(@line_ary, $line);
+  }
+ }
+ return @line_ary;
+}
