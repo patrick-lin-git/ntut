@@ -1,0 +1,405 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+if($#ARGV < 1) {
+ print "Objective:\n";
+ print "    This program will read in SV module's definition file \"def_file\"\n";
+ print "    to generate a multi instances file for included in your upper layer\n";
+ print "    verilog simulation enviroment or design\n\n";
+ print "Usage:\n";
+ print "    gen_sv_inst.pl  num_of_inst_copy  def_sv_filename\n\n";
+ print "      num_of_inst_copy :   number of instances you want to create\n";
+ print "      def_sv_filename  :   system verilog module definition file name\n\n";
+ print "Output:\n";
+ print "      This Perl Script will output one following verilog file.\n";
+ print "         def_sv_filename.verilog\n\n";
+ print "Example:\n";
+ print "      gen_sv_inst.pl  1  src_in.sv\n";
+ print "      output => src_in.sv.verilog\n\n";
+ print "Author: Patrick.Lin \n";
+ die "\n";
+}
+
+my $Inst_Num =  $ARGV[0];
+my $Def_File =  $ARGV[1];
+
+my $date = `/usr/bin/date '+%m/%d/%y'`;
+chop($date);
+
+
+my $veri_out_str = "";     # store formatted verilog statement for output
+
+# Read in all lines
+open(IN_V, "$Def_File") || die "Can't open $Def_File\n";
+my @line_statement = <IN_V>;     # get contain of instance declaration
+close(IN_V);
+
+# ------------------------------------------------------------------------------
+# looking for module name
+my $modu_name;
+foreach (@line_statement) {
+ my $line = $_;
+ chomp $line;
+ if($line =~ /^\s*module\s+((\w|\_)+)\s*[\(|\#\(]/) {
+  $modu_name = $1;
+  last;
+ }
+
+ if($line =~ /^\s*module\s+((\w|\_)+)\s*$/) {
+  $modu_name = $1;
+  last;
+ }
+}
+# print "module name $modu_name\n";
+
+
+# ------------------------------------------------------------------------------
+# looking for parameter define
+my $param_def=0;
+
+my %param_hsh;
+my @param_ary;   # recording the order
+my $param_on=0;
+foreach (@line_statement) {
+ my $line = $_;
+ chomp $line;
+
+ if( ($param_on == 1) && ($line =~ /\s*(\w+)\s*=\s*([\w|']+)/ ) ) {
+  push(@param_ary, $1);
+  $param_hsh{$1} = $2; 
+ }
+
+ if( $line =~ /\s*#\(/ ) {
+  $param_def = 1;
+  if($line =~ /\)/) {
+   # same line
+  } else {
+   if($line =~ /parameter (\w+)\s*=\s*([\w|']+)/ ) {
+    push(@param_ary, $1);
+    $param_hsh{$1} = $2; 
+    $param_on = 1;
+   }
+  }
+ }
+
+ if($line =~ /\)/) {
+  $param_on = 0;
+  last;
+ }
+}
+
+# my @param_ary;
+# while (my ($para_name, $para_valu) = each (%param_hsh)) {  	
+#  print "==> $para_name, $para_valu\n";
+#  push(@param_ary, $para_name);
+# }
+
+
+# ------------------------------------------------------------------------------
+# screen out for post list 
+my $port_on = 0;
+my @port_ary;
+foreach (@line_statement) {
+ my $line = $_;
+ chomp $line;
+
+ if( ($port_on == 1) && ($line =~ /\w+/ ) ) {
+  push(@port_ary, $line);
+ }
+
+ if($line =~ /^\s*module\s+((\w|\_)+)\s*\(/) {
+  $port_on = 1;
+ }
+
+ if($line =~ /^\s*\(/) {
+  $port_on = 1;
+ }
+
+ if($line =~ /^\s*\);/) {
+  $port_on = 0;
+ }
+
+}
+
+
+my %port_hsh_iod;
+my %port_hsh_wid;
+my %port_hsh_typ;
+
+my $port_name;
+my $port_type;
+my $port_dir;
+my $port_widt;
+
+my $max_port_name_len = 10;
+my $max_port_widt = 1;
+
+my @port_ord;                          # port name in source code order
+
+foreach (@port_ary) {
+ my $line = $_;
+ chomp $line;
+ $line =~ s/^\s*//;                    # remove the heading space
+ $line =~ s/,.*$//;                    # remove the tailing ','
+ my @iop_ary = split('\s+', $line);
+ my $num_of_cell = @iop_ary;
+
+ if( $num_of_cell == 2 ) {
+  $port_name = $iop_ary[1];
+
+# my $type = $iop_ary[0];
+# $type =~ s/\..*//;              # remove modify port
+# $port_type = $type;
+  $port_type = $iop_ary[0];
+
+  $port_dir  = "B";
+  $port_widt = 1;
+ }
+
+ if( $num_of_cell == 3 ) {
+  $port_name = $iop_ary[2];
+  $port_type = $iop_ary[1];
+
+  if( $iop_ary[0] eq "input" ) {
+   $port_dir  = "I";
+  }
+  if( $iop_ary[0] eq "output" ) {
+   $port_dir  = "O";
+  }
+  if( $iop_ary[0] eq "inout" ) {
+   $port_dir  = "B";
+  }
+
+  $port_widt = 1;
+ }
+
+ if( $num_of_cell == 4 ) {
+  $port_name = $iop_ary[3];
+  $port_type = $iop_ary[1];
+  if( $iop_ary[0] eq "input" ) {
+   $port_dir  = "I";
+  }
+  if( $iop_ary[0] eq "output" ) {
+   $port_dir  = "O";
+  }
+  if( $iop_ary[0] eq "inout" ) {
+   $port_dir  = "B";
+  }
+
+  my $wid_str = $iop_ary[2];
+  my $msb;
+  my $lsb;
+  if( $wid_str =~ /(\d+)\:(\d+)/ ) {
+   $msb = $1;
+   $lsb = $2;
+  }
+  
+  $port_widt = $msb-$lsb+1;
+
+  if( $port_widt > $max_port_widt ) {
+   $max_port_widt = $port_widt;
+  }
+
+ }
+
+ my $pstr_len = length($port_name);
+ if( $pstr_len > $max_port_name_len) {
+  $max_port_name_len = $pstr_len;
+ }
+
+ # print "PORT ==> $num_of_cell\n";
+ # print " NAME => $port_name\n";
+ # print " TYPE => $port_type\n";
+ # print " DIRC => $port_dir\n";
+ # print " WIDT => $port_widt\n\n";
+
+ $port_hsh_iod{$port_name} = $port_dir;
+ $port_hsh_wid{$port_name} = $port_widt;
+ $port_hsh_typ{$port_name} = $port_type;
+ push(@port_ord, $port_name);
+}
+
+
+# print " Max Len => $max_port_name_len\n";
+
+$veri_out_str .= "// This Verilog file was auto-generated by \"gen_sv_inst\"\n";
+$veri_out_str .= "// The source file was from \"$Def_File\"\n\n";
+$veri_out_str .= "// This generated file contain $Inst_Num instance\n";
+$veri_out_str .= "// Date:  $date\n\n\n";
+
+my $modu_name_len = length($modu_name);
+
+for( my $inst_cnt = 0 ; $inst_cnt < $Inst_Num ; $inst_cnt++ ) {
+
+ my $tab_size;
+ my $prt_indx;
+ my $inst_name;
+ if( $Inst_Num > 1 ) {
+  $veri_out_str .= "// $inst_cnt \n";
+  $inst_name = "U_$modu_name"."_inst_$inst_cnt";
+  $veri_out_str .= gen_def_str($inst_cnt, $Inst_Num, $inst_name);
+  $tab_size = 3;
+  $prt_indx = "_$inst_cnt"; 
+ } else {
+  $inst_name = "U_$modu_name"."_inst";
+  $veri_out_str .= gen_def_str(0,         $Inst_Num, $inst_name);
+  $tab_size = 1;
+  $prt_indx = "";
+ }
+ $veri_out_str .= "$modu_name ".$inst_name." \(\n";
+
+#while (my ($prt_name, $prt_iodr) = each (%port_hsh_iod)) {  	
+ foreach(@port_ord) {
+  my $prt_name = $_;
+  my $prt_iodr = $port_hsh_iod{$prt_name}; 
+  my $prt_widt = $port_hsh_wid{$prt_name}; 
+  my $prt_type = $port_hsh_typ{$prt_name}; 
+  my $prt_naml = lc($prt_name);          # lower case
+  # print "$key => $value\n";
+
+  my $prt_n_len = length($prt_name);
+  my $len_dif = $max_port_name_len - $prt_n_len;
+
+  if( $prt_widt > 1 ) {
+   # generate aligen string
+
+   my $prt_widt_str;
+
+#  if( $prt_widt > 9 ) {
+#   $prt_widt_str = $prt_widt;
+#  } else {
+#   $prt_widt_str = " $prt_widt";
+#  }
+
+   $prt_widt_str = gen_spc_widt($max_port_widt, $prt_widt)."$prt_widt";
+
+   $veri_out_str .= gen_spc($modu_name_len*2+8+$tab_size)." .$prt_name".gen_spc($len_dif). " ( $prt_naml".$prt_indx." ), ".gen_spc($len_dif)."\/\/ $prt_iodr $prt_widt_str\n";
+  } else {
+   if( ($prt_type eq "logic") || ($prt_type eq "wire") || ($prt_type eq "reg")) {
+    if( ($prt_naml =~ /clk/) || ($prt_naml =~ /rst/) || ($prt_naml =~ /reset/) ) {
+     # no port index
+     my $clkrst_s;
+     my $prt_indx_len = length($prt_indx);
+     if( ($prt_indx_len > 0) && ($prt_iodr eq "I") ) {
+      $clkrst_s = gen_spc($prt_indx_len);
+     } else {
+      $clkrst_s = $prt_indx;
+     }
+     $veri_out_str .= gen_spc($modu_name_len*2+8+$tab_size)." .$prt_name".gen_spc($len_dif). " ( $prt_naml".$clkrst_s." ), ".gen_spc($len_dif)."\/\/ $prt_iodr\n";
+    } else {
+     $veri_out_str .= gen_spc($modu_name_len*2+8+$tab_size)." .$prt_name".gen_spc($len_dif). " ( $prt_naml".$prt_indx." ), ".gen_spc($len_dif)."\/\/ $prt_iodr\n";
+    }
+   } else {
+    $veri_out_str .= gen_spc($modu_name_len*2+8+$tab_size)." .$prt_name".gen_spc($len_dif). " ( $prt_naml".$prt_indx." ), ".gen_spc($len_dif)."\/\/ $prt_iodr $prt_type\n";
+   }
+  }
+ }  # for each
+ # remove last ','
+ $veri_out_str =~ s/\,(.*)$/ $1/;
+ $veri_out_str .= gen_spc($modu_name_len*2+7+$tab_size)." );\n\n";
+}
+
+
+my $of_name = $Def_File.".verilog";
+$of_name = `/bin/basename $of_name`;
+$of_name =~ s/\n//g;
+
+open(OUT_V, ">$of_name") || die "Can't open $of_name\n";
+print OUT_V $veri_out_str;
+close(OUT_V);
+print "=> $of_name generated\n";
+
+# end of processing verilog 
+
+# ------------------------------------------------------------------------
+sub gen_spc {
+ my $len = shift;
+ my $spc = "";
+ if( $len == 0 ) {
+  return $spc;
+ } else {
+  my $i=0;
+  for($i = 0 ; $i < $len ; $i++) {
+   $spc .= " ";
+  }
+  return $spc;
+ }
+}
+
+
+# ------------------------------------------------------------------------
+sub gen_spc_widt {
+ my $max_widt = $_[0];
+ my $cur_widt = $_[1];
+
+ my $max_widt_len;
+ my $cur_widt_len;
+
+ if( $max_widt > 99 ) {
+  $max_widt_len = 3;
+ } else {
+  if( $max_widt > 9 ) {
+   $max_widt_len = 2;
+  } else {
+   $max_widt_len = 1;
+  }
+ }
+
+ if( $cur_widt > 99 ) {
+  $cur_widt_len = 3;
+ } else {
+  if( $cur_widt > 9 ) {
+   $cur_widt_len = 2;
+  } else {
+   $cur_widt_len = 1;
+  }
+ }
+
+ my $diff = $max_widt_len - $cur_widt_len;
+
+#print "diff is $diff\n";
+
+ my $spc;
+ $spc = gen_spc($diff);
+ return $spc;
+}
+
+
+sub gen_def_str {
+ my $inst_i = $_[0]; # index
+ my $tot_is = $_[1]; # total instance number
+ my $inst_n = $_[2]; # instance name
+
+ my $str_out = "";
+
+ if( $param_def == 1 ) {
+  my $ary_len = @param_ary;
+  print "===> $ary_len\n";
+  if( $ary_len > 1 ) {
+#  my $para_name = $param_ary[0];
+#  print "====> $para_name\n";
+#  my $para_valu = $param_hsh{$para_name};
+#  $str_out  = "defparam $inst_n".".$para_name = $para_valu,\n";
+   $str_out  = "defparam ";
+#  shift(@param_ary);
+   foreach(@param_ary) {
+    my $para_name = $_;
+    my $para_valu = $param_hsh{$para_name};
+    $str_out  .= "         $inst_n".".$para_name = $para_valu,\n";
+   }
+   # replace last ',' with ';'
+   $str_out =~ s/,\n$/;\n/;
+  } else {
+   # one single line
+   my $para_name = $param_ary[0];
+   print "==> $para_name\n";
+   my $para_valu = $param_hsh{$para_name};
+   $str_out  = "defparam $inst_n".".$para_name = $para_valu;\n";
+  }
+ }
+ # beautify the string
+ $str_out =~ s/defparam\s+U/defparam U/;
+ return $str_out;
+}
