@@ -75,6 +75,7 @@ push(@out_ary,  "use warnings;\n\n");
 
 push(@out_ary,  "print \"$cmt -----------------------------------------------\\n\";\n");
 push(@out_ary,  "print \"$cmt This is a ppp auto-generated file. DO NOT EDIT!\\n\";\n");
+push(@out_ary,  "print \"$cmt Source File: $fname\\n\";\n");
 push(@out_ary,  "print \"$cmt By user: $user_name, $run_time\\n\";\n");
 push(@out_ary,  "print \"$cmt -----------------------------------------------\\n\";\n");
 
