@@ -66,22 +66,48 @@ foreach (@line_statement) {
  my $line = $_;
  chomp $line;
 
+ if( $line =~ /^\s*\/\// ) {
+  next;
+ }
+
+ if( $line =~ /\s*#\(\s*parameter (.*)\)/ ) {
+  # single line
+  $param_def = 1;
+  my $param_ite = $1;
+  if( $param_ite =~ /,/ ) {
+   my @parm_ary = split(',', $param_ite);
+   foreach (@parm_ary) {
+    my $aeqb = $_;   
+    if( $aeqb  =~ /\s*(\w+)\s*=\s*([\w|']+)/ )  {
+     push(@param_ary, $1);
+     $param_hsh{$1} = $2; 
+    } else {
+     die "cannot found parameter A=B pattern in multiple A=B, C=D";
+    }
+   }
+  } else {
+   chomp $param_ite;
+   if( $param_ite  =~ /\s*(\w+)\s*=\s*([\w|']+)/ )  {
+    push(@param_ary, $1);
+    $param_hsh{$1} = $2; 
+   } else {
+    die "cannot found parameter A=B pattern";
+   }
+  }
+  last;
+ } else {
+  # not in single line
+  if( $line =~ /\s*#\(\s*/ ) {
+   $param_def = 1;
+   $param_on = 1;
+  } else {
+   # no module top parameter definition
+  }
+ }
+
  if( ($param_on == 1) && ($line =~ /\s*(\w+)\s*=\s*([\w|']+)/ ) ) {
   push(@param_ary, $1);
   $param_hsh{$1} = $2; 
- }
-
- if( $line =~ /\s*#\(/ ) {
-  $param_def = 1;
-  if($line =~ /\)/) {
-   # same line
-  } else {
-   if($line =~ /parameter (\w+)\s*=\s*([\w|']+)/ ) {
-    push(@param_ary, $1);
-    $param_hsh{$1} = $2; 
-    $param_on = 1;
-   }
-  }
  }
 
  if($line =~ /\)/) {
@@ -105,7 +131,8 @@ foreach (@line_statement) {
  my $line = $_;
  chomp $line;
 
- if( ($port_on == 1) && ($line =~ /\w+/ ) ) {
+ if( ($port_on == 1) && ($line =~ /\w+/ ) && ($line !~/^\s*\/\//) ) {
+  $line =~ s/\/\/.*//;
   push(@port_ary, $line);
  }
 
@@ -376,7 +403,8 @@ sub gen_def_str {
 
  if( $param_def == 1 ) {
   my $ary_len = @param_ary;
-  print "===> $ary_len\n";
+# print "===> $ary_len\n";
+  my $para_name = $param_ary[0];
   if( $ary_len > 1 ) {
 #  my $para_name = $param_ary[0];
 #  print "====> $para_name\n";
@@ -385,7 +413,7 @@ sub gen_def_str {
    $str_out  = "defparam ";
 #  shift(@param_ary);
    foreach(@param_ary) {
-    my $para_name = $_;
+    $para_name = $_;
     my $para_valu = $param_hsh{$para_name};
     $str_out  .= "         $inst_n".".$para_name = $para_valu,\n";
    }
@@ -394,7 +422,7 @@ sub gen_def_str {
   } else {
    # one single line
    my $para_name = $param_ary[0];
-   print "==> $para_name\n";
+#  print "==> $para_name\n";
    my $para_valu = $param_hsh{$para_name};
    $str_out  = "defparam $inst_n".".$para_name = $para_valu;\n";
   }
