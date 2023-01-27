@@ -5,20 +5,30 @@
 import re
 import sys
 
+
+# wire name array
+wire_n=[]
+
 def prn_out(prt_n):
  prtnn = prt_n.ljust(pnlen+1, ' ')
- if( io_dir=="input" ):
-  out_str=intfn+"."+prtnn+" = "+prefx+prt_n+";"
+ if( sig_n_up ):
+  prtcn = prt_n.upper()
  else:
-  out_str=prefx+prtnn+" = "+intfn+"."+prt_n+";"
- print(out_str)
+  prtcn = prt_n.lower()
+ prtxn = prtcn.ljust(pnlen+1, ' ')
+ if( io_dir=="input" ):
+  out_str=intfn+"."+prtnn+" = "+prefx+prtcn+";"
+ else:
+  out_str=prefx+prtxn+" = "+intfn+"."+prt_n+";"
+ print("assign "+out_str)
+ wire_n.append("logic "+prefx+prtcn+";")
 
 
 
 # ------------------------------------------------
 arg_n=len(sys.argv)
 
-if( arg_n <= 4):
+if( arg_n <= 4 ):
  print("Progrm "+sys.argv[0]+" need argument")
  print("Usage:")
  print("    "+sys.argv[0]+" sv_intf_file  modport_name  gen_intf_name  gen_sig_prefix")
@@ -34,6 +44,11 @@ else:
  intfn = sys.argv[3]
  prefx = sys.argv[4]
 
+
+if( prefx.isupper() ):
+ sig_n_up = 1
+else:
+ sig_n_up = 0
 
 # read in interface file
 file_in = open(filen, 'r')
@@ -103,6 +118,10 @@ if modprt:
 #   pnlen = len(prt_nm
    prtt=prtt.strip()
    prn_out(prtt)
+
+ print("\n")
+ for w_n in wire_n:
+  print(w_n)
  
 else:
  print('modport \"'+modpt+'\" definition was not found in file: '+filen)
