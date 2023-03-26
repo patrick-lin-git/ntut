@@ -146,6 +146,7 @@ foreach (@line_statement) {
 
  if($line =~ /^\s*\);/) {
   $port_on = 0;
+  last;
  }
 
 }
@@ -218,16 +219,43 @@ foreach (@port_ary) {
   my $wid_str = $iop_ary[2];
   my $msb;
   my $lsb;
-  if( $wid_str =~ /(\d+)\:(\d+)/ ) {
+  my $prm;
+  if( $wid_str =~ /\[\s*(\d+)\s*\:\s*(\d+)\]/ ) {
    $msb = $1;
    $lsb = $2;
+   $prm = "0";
+  } else {
+#  print "$wid_str\n";
+   if( $wid_str =~ /\[\s*([\w|\_|\d]+)\s*-1\s*\:\s*0\]/ ) {
+    $msb = 111;
+    $lsb = 111;
+    $prm = $1;
+   } else {
+    print "DEBUG: $wid_str\n";
+    die;
+   }
   }
   
-  $port_widt = $msb-$lsb+1;
-
-  if( $port_widt > $max_port_widt ) {
-   $max_port_widt = $port_widt;
+  if( not_a_num($prm) ) {
+   $port_widt = $prm;        
+   my $strlen = length($prm);
+   if( $strlen > $max_port_widt ) {
+    $max_port_widt = $strlen;
+   } 
+  } else {
+   $port_widt = $msb-$lsb+1;
+   if( $port_widt > $max_port_widt ) {
+    $max_port_widt = $port_widt;
+   } 
   }
+
+#  else {
+#  if( ($msb == 111) && ($lsb==111) ) {
+#   $port_widt = $prm;
+#   print "==> $prm\n";
+#   $max_port_widt = length($prm);
+#  }
+# }
 
  }
 
@@ -289,6 +317,12 @@ for( my $inst_cnt = 0 ; $inst_cnt < $Inst_Num ; $inst_cnt++ ) {
   my $prt_n_len = length($prt_name);
   my $len_dif = $max_port_name_len - $prt_n_len;
 
+  if( not_a_num($prt_widt) ) {
+   my $prt_widt_str;
+   my $str_widt = length($prt_widt);
+   $prt_widt_str = gen_spc_widt($max_port_widt, $str_widt).$prt_widt;
+   $veri_out_str .= gen_spc($modu_name_len*2+8+$tab_size)." .$prt_name".gen_spc($len_dif). " ( $prt_naml".$prt_indx." ), ".gen_spc($len_dif)."\/\/ $prt_iodr $prt_widt_str\n";
+  } else {
   if( $prt_widt > 1 ) {
    # generate aligen string
 
@@ -321,6 +355,7 @@ for( my $inst_cnt = 0 ; $inst_cnt < $Inst_Num ; $inst_cnt++ ) {
    } else {
     $veri_out_str .= gen_spc($modu_name_len*2+8+$tab_size)." .$prt_name".gen_spc($len_dif). " ( $prt_naml".$prt_indx." ), ".gen_spc($len_dif)."\/\/ $prt_iodr $prt_type\n";
    }
+  }
   }
  }  # for each
  # remove last ','
@@ -393,6 +428,16 @@ sub gen_spc_widt {
  return $spc;
 }
 
+sub not_a_num {
+ my $var = $_[0]; 
+ my $str = "$var";
+ $str =~ s/\d//g;
+ if( $str =~ /\w/ ) {
+  return 1;
+ } else {
+  return 0;
+ }
+}
 
 sub gen_def_str {
  my $inst_i = $_[0]; # index
