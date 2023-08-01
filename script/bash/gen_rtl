@@ -1,0 +1,242 @@
+#!/bin/bash
+
+year=`date +%Y`
+mont=`date +%m`
+days=`date +%d`
+date=$mont$days$year
+
+
+function help() {
+ echo "if no argument provided, default file list name is src.f and default target directory is ../rtl"
+ echo "Usage:"
+ echo "   gen_rtl src_list.f target_dir"
+}
+
+
+
+# $1 source file list
+# $2 target directory
+function cp_file_list() {
+  src_fl=$1
+  trg_dr=$2
+  while read -r line
+  do
+    if [[ "$line" =~ ^\s*\/\/ ]] ; then
+      continue
+    fi
+
+    if [ "$line" == "" ] ; then
+      continue
+    fi
+
+    if [[ "$line" =~ '-f' ]]; then
+    # echo "Found -f"
+      flst=`echo $line | sed -e 's/-f//'`
+      if [ ! -f $flst ]; then
+        curd=`pwd`
+        echo "Filelist: $flst not exist at $curd"
+        exit
+      fi
+
+      dos2unix $flst
+ 
+    # echo "===="
+      dirn=`dirname $flst`
+    # echo $flst
+      filn=`basename $flst`
+    # echo $dirn 
+    # rtld=`pwd`
+    # $rtld=$rtld
+      pushd . > /dev/null ; cd $dirn ; cp_file_list $filn $trg_dr ; popd > /dev/null
+    # echo "===="
+    else
+    # if [ ! -e $line ]; then
+    #   echo "File: $line not exist"
+    #   exit
+    # fi
+    # echo "Not Found -f"
+    # src=`eval echo $line`
+      src=`eval echo $line`
+      curd=`pwd`
+      # echo $src $curd
+      if [ ! -f $src ]; then
+      # echo "+++++++"
+      # echo $line
+        curd=`pwd`
+      # echo $src
+      # ls -al
+      # ls $src
+      # ls $line
+      # echo "File: $src not exist at $curd"
+        echo -n "File: "
+        echo -n $src
+        echo " not exist at $curd"
+      # echo "+++++++"
+        exit
+      fi
+    # echo $src
+    # echo "++++++++++++++"
+      srf=`basename $src`
+    # echo $srf
+    # echo "++++++++++++++"
+      cp -f $src $trg_dr
+    # curd=`pwd`
+    # echo "++++++++++++++"
+    # ls -al $src
+    # echo "$curd"
+    # echo "++++++++++++++"
+      #+ do post-processing here
+      sed -i -e "/Release/s/MMDDYYYY/$date/"  $trg_dr/$srf
+    # sed -i -e "/default_nettype/s/^/\/\/ /" $trg_dr/$srf
+      #- do post-processing here
+      chmod 0444 $trg_dr/$srf
+    fi
+  done < $src_fl
+}
+
+
+
+
+if [ $# -lt 1 ]; then
+  # default source file list and target folder
+  srcf=src.f
+  fnam=src.f
+  tdir=../rtl
+  if [ -f $srcf ]; then
+    # make a real copy to the "../rtl" directory
+    if [ ! -e $tdir ]; then
+      mkdir $tdir
+    fi
+  else
+    echo "File: $srcf not exist, add -h for help"
+    exit
+  fi
+else
+  if [[ "$1" =~ '-h' ]]; then
+    help
+    exit
+  else
+    srcf=$1
+    tdir=$2
+    dirn=`dirname  $srcf`
+    fnam=`basename $srcf`
+    cd $dirn
+#   pwd
+#   if [ "$dirn" != "." ]; then
+#     echo "source file can only be local"
+#     exit
+#   fi
+  fi
+fi
+
+# now in src.f actual file path (pwd)
+
+# if [ ! -f $srcf ]; then
+if [ -f $fnam ]; then
+  srcf=$fnam
+else
+  echo "File: $srcf not exist"
+  exit
+fi
+
+
+# -----------------------------------------------
+# remove comment out file
+# src_f=`cat $srcf | sed -e '/\/\//d ; s/-v//'`
+
+# echo $srcf
+# echo "====================================="
+
+
+while read -r line
+do
+# echo "-------------------------------------"
+# echo $line
+# echo $line | grep '^\s*\/\/'
+# status=$?
+# echo $status
+# if [ $status -eq 0 ]; then
+#   echo "//"
+# fi
+  if [[ "$line" =~ ^\s*\/\/ ]] ; then
+  # echo "+++++++++++++"
+    continue
+  fi
+
+  if [ "$line" == "" ] ; then
+    continue
+  fi
+
+
+
+# else
+#   echo "\\\\"
+# fi
+
+# echo "=============="
+
+# echo $line | grep '\-f'
+# status=$?
+# echo $status
+# if [ $status -eq 0 ]; then
+  if [[ "$line" =~ '-f' ]]; then
+  # echo "Found -f"
+    flst=`echo $line | sed -e 's/-f//'`
+  # echo "===="
+
+    if [ ! -f $flst ]; then
+      curd=`pwd`
+      echo "Filelist: $flst not exist at $curd"
+      exit
+    fi
+
+    dos2unix $flst
+
+    dirn=`dirname $flst`
+  # echo $flst
+    filn=`basename $flst`
+  # echo $dirn 
+    # check absolute path of target path
+    if [[ "$tdir" =~ ^/.* ]]; then
+      rtld=$tdir
+    else
+      rtld=`pwd`
+      rtld=$rtld/$tdir
+    fi
+  # pushd . > /dev/null ; cd $dirn ; cp_file_list $filn $rtld/$tdir ; popd > /dev/null
+    pushd . > /dev/null ; cd $dirn ; cp_file_list $filn $rtld       ; popd > /dev/null
+  # echo "===="
+  else
+  # if [ ! -f $line ]; then
+  #   echo "File: $line not exist"
+  #   exit
+  # fi
+  # echo "Not Found -f"
+    src=`eval echo $line`
+    if [ ! -f $src ]; then
+      curd=`pwd`
+      echo "File: $src not exist at $curd"
+      exit
+    fi
+  # echo $src
+  # echo "---------"
+    srf=`basename $src`
+  # echo "---------"
+  # echo $srf
+    cp -f $src $tdir
+    #+ do post-processing here
+    sed -i -e "/Release/s/MMDDYYYY/$date/"  $tdir/$srf
+  # sed -i -e "/default_nettype/s/^/\/\/ /" $tdir/$srf
+    #- do post-processing here
+    chmod 0444 $tdir/$srf
+  fi
+
+# src=`eval echo $line`
+# echo $src
+# srf=`basename $src`
+# echo $srf
+
+done < $srcf
+
+
+echo Release Date: $mont $days
